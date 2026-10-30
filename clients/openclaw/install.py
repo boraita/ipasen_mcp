@@ -356,7 +356,7 @@ def main() -> None:
     probe_out = openclaw("mcp", "probe", check=False).stdout
     line = next((l for l in probe_out.splitlines() if f"{args.name}:" in l), "(not listed)")
     print(f"    {line.strip()}")
-    expected = 37 + (len(ACTIONS) if actions_on else 0)
+    expected = 39 + (len(ACTIONS) if actions_on else 0)  # 37 queries + school_digest + mark_digested
     if f"{expected} tools" not in line:
         fail(f"expected {expected} tools for {args.name}; check `openclaw mcp probe`")
 

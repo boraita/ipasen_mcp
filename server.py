@@ -673,6 +673,66 @@ def raw_get(path: str, params: dict | None = None):
     return _request("GET", path.lstrip("/"), params)
 
 
+# ── DIGEST (for scheduled jobs) ───────────────────────────────────────────────
+# Lets a cron job see each school message once. Bookkeeping is local (state file);
+# nothing is sent to iPasen and the messages' read state is not touched.
+
+@mcp.tool()
+def school_digest(days_back: int = 14, max_messages: int = 25) -> dict:
+    """New school messages not yet processed by the digest, with their full text. Read-only.
+
+    Meant for a scheduled job: read the messages, act on them, then call mark_digested with
+    their ids so they are not returned again. The first time, only messages from the last
+    `days_back` days are considered.
+
+    Args:
+        days_back: how far back to look on the first run, or after a long pause (default 14)
+        max_messages: cap per call; call again after mark_digested if `more` is true
+    """
+    seen = set(_load_state().get("digested_ids") or [])
+    names = {k["enrollment"]: k.get("simpleName") for k in _children()}
+    cutoff = date.today() - timedelta(days=days_back)
+    found: dict = {}
+    for page in range(1, 40):
+        batch = _get("mensajeria/get-comunicaciones", page=page)
+        if not batch:
+            break
+        for m in batch:
+            if m["id"] in seen:
+                continue
+            item = found.setdefault(m["id"], {
+                "id": m["id"], "date": m.get("date"), "from": m.get("sender"), "subject": m.get("subject", ""),
+                "students": [], "attachments": m.get("has_adj", False), "text": _text(m.get("body_message", ""))[:3000],
+            })
+            student = names.get(str(m.get("enrollment")))
+            if student and student not in item["students"]:
+                item["students"].append(student)
+        if all(_date(m["date"][:10]) < cutoff for m in batch if m.get("date")):
+            break
+    fresh = [m for m in found.values() if m.get("date") and _date(m["date"][:10]) >= cutoff]
+    fresh.sort(key=lambda m: _iso(m["date"][:10]))
+    return {
+        "today": date.today().strftime("%A %d/%m/%Y"),
+        "children": [{"child": k.get("simpleName"), "course": k.get("course"), "group": k.get("unity")} for k in _children()],
+        "messages": fresh[:max_messages],
+        "more": len(fresh) > max_messages,
+    }
+
+
+@mcp.tool()
+def mark_digested(message_ids: list[int]) -> dict:
+    """Record that these messages were processed by the digest, so school_digest skips them.
+
+    Local bookkeeping only: nothing is sent to iPasen and the messages stay unread in the app.
+
+    Args:
+        message_ids: the `id` of every message returned by school_digest (also the ignored ones)
+    """
+    seen = list(dict.fromkeys((_load_state().get("digested_ids") or []) + [int(i) for i in message_ids]))
+    _save_state(digested_ids=seen[-2000:])
+    return {"ok": True, "recorded": len(message_ids)}
+
+
 # ── ACTIONS ───────────────────────────────────────────────────────────────────
 # All actions follow the same two-step protocol (see ACTIONS.md):
 #   1) without confirm_code → validate, return {"preview", ...} and send NOTHING
@@ -1357,7 +1417,7 @@ for _tool in mcp._tool_manager.list_tools():
     if _tool.description.startswith("ACTION"):
         _tool.annotations = ToolAnnotations(readOnlyHint=False, destructiveHint=_tool.name not in _REVERSIBLE,
                                             idempotentHint=False, openWorldHint=True)
-    elif _tool.name in ("login", "logout"):
+    elif _tool.name in ("login", "logout", "mark_digested"):
         _tool.annotations = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True)
     else:
         _tool.annotations = ToolAnnotations(readOnlyHint=True, openWorldHint=True)

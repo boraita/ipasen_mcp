@@ -81,8 +81,8 @@ IPASEN_USER='…' IPASEN_PASSWORD='…' python3 ~/mcp/install.py --name ipasen_p
 Useful flags: `--holder "Name"` (how the skill refers to the person), `--read-only` (turn
 actions off again), `--ref <tag>` (pin a version), `--uninstall [--purge]`.
 
-Expected output ends with `Done.` and a probe line like `ipasen: 37 tools` (read-only) or
-`ipasen: 53 tools` (with actions). With actions, the human receives a Telegram message
+Expected output ends with `Done.` and a probe line like `ipasen: 39 tools` (read-only) or
+`ipasen: 55 tools` (with actions). With actions, the human receives a Telegram message
 "iPasen MCP (ipasen) installed…" — ask them to confirm it arrived.
 
 If it fails:

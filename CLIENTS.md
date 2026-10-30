@@ -88,7 +88,7 @@ cd ~/mcp/ipasen && venv/bin/python -c "import server; print(server.login()); pri
 | Descriptions | actions start with `ACTION ·` and say which query each id comes from |
 | `ACTIONS.md` | the full action guide; give the agent access to it or copy it into its skill |
 
-Inventory: 39 non-action tools (37 queries + `login`/`logout`) and 16 actions (7 reversible,
+Inventory: 41 non-action tools (37 queries, `school_digest`/`mark_digested`, `login`/`logout`) and 16 actions (7 reversible,
 9 destructive). Tool names seen by the model depend on the client:
 
 | Client | Tool name |
@@ -151,7 +151,7 @@ OpenClaw agent itself can follow it, and it:
   `telegram` confirmation mode (inline mode is never used in OpenClaw);
 - grants or denies the server per agent (`--agent`, `--deny-agent`);
 - writes a skill filled in with the family's data;
-- reloads and probes (`37 tools` read-only, `53 tools` with actions).
+- reloads and probes (`39 tools` read-only, `55 tools` with actions).
 
 What it does by hand, for reference:
 

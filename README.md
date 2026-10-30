@@ -32,6 +32,7 @@ justify absences, answer authorizations, reply to teachers, book parent-teacher 
   child are merged into one.
 - Two-factor authentication with trusted devices; several accounts (e.g. both parents) side by side.
 - MCP tool annotations: queries are `readOnlyHint`, irreversible actions `destructiveHint`.
+- **Digest for scheduled jobs** (`school_digest` + `mark_digested`): each school message is seen once, e.g. to turn it into tasks and calendar events.
 - **OpenClaw installer** that your OpenClaw agent can run by itself.
 
 ---
@@ -69,7 +70,7 @@ IPASEN_USER='your_user' IPASEN_PASSWORD='your_password' python3 install.py --age
 The installer downloads the server, creates the virtualenv, stores secrets in
 `~/.config/ipasen-mcp/<name>/credentials.env` (mode 600, never in `openclaw.json`), registers the
 server, grants it to the agent, writes a skill with your family's data, and probes it
-(`37 tools` read-only, `53 tools` with actions). Re-run it to update. Details and options:
+(`39 tools` read-only, `55 tools` with actions). Re-run it to update. Details and options:
 [clients/openclaw/INSTALL.md](clients/openclaw/INSTALL.md).
 
 ### Claude Code, Claude Desktop, OpenCode
@@ -261,6 +262,7 @@ Advice for keeping agents safe: [CLIENTS.md](CLIENTS.md).
 | `pickup_people`, `student_profile`, `school_history`, `textbooks`, `access_keys`, `scholarships`, `documents_to_sign`, `my_data` | what the name says |
 | `absence_slots`, `message_recipients`, `message_tags`, `tutorship_slots` | helpers to prepare actions |
 | `raw_get` | any other GET endpoint of the API |
+| `school_digest` / `mark_digested` | for scheduled jobs: messages not yet processed (full text) / record them as processed (local only, the app's read state is untouched) |
 | `login`, `logout` | session handling (normally automatic) |
 
 ### Actions (preview → confirm)
