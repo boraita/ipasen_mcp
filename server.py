@@ -623,15 +623,24 @@ def read_message(message_id: int) -> dict:
     Args:
         message_id: `id` returned by messages
     """
-    conv = _get("mensajeria/get-conversaciones", id=message_id, page=1)
+    # The endpoint returns the whole conversation with that sender (every message, oldest first,
+    # 10 per page, one copy per child), so keep only the requested message. Its `pages` field just
+    # echoes the page asked for: read until an empty page.
+    names = {k["enrollment"]: k.get("simpleName") for k in _children()}
+    found = []
+    for page in range(1, 60):
+        batch = _get("mensajeria/get-conversaciones", id=message_id, page=page).get("messages", [])
+        found += [m for m in batch if m.get("id") == message_id]
+        if not batch or (found and all(m.get("id") != message_id for m in batch)):
+            break
+    if not found:
+        raise ValueError(f"Message {message_id} not found in its conversation (use messages() for valid ids)")
+    m = found[0]
     return {
-        "pages": conv.get("pages"),
-        "messages": [
-            {"date": m.get("date"), "from": m.get("sender"), "to": m.get("recipient"), "subject": m.get("subject"),
-             "student": m.get("student"), "text": _text(m.get("body_message", "")),
-             "attachments": [a.get("name") or a for a in m.get("attachments", [])]}
-            for m in conv.get("messages", [])
-        ],
+        "id": message_id, "date": m.get("date"), "from": m.get("sender"), "subject": m.get("subject"),
+        "students": [n for n in dict.fromkeys(names.get(str(x.get("enrollment"))) for x in found) if n],
+        "text": _text(m.get("body_message", "")),
+        "attachments": [{"name": a.get("attachmentName") or a.get("name"), "url": a.get("url")} for a in m.get("attachments", [])],
     }
 
 
@@ -797,7 +806,7 @@ def _post(path: str, *, json_body=None, files=None):
     return {"status": "SENT", "endpoint": path, "server_response": result}
 
 
-def _message_copies(message_id: int, child: str = "", pages: int = 10) -> list[dict]:
+def _message_copies(message_id: int, child: str = "", pages: int = 40) -> list[dict]:
     """Copies of a message in the inbox: the school sends one per child, each with its own id_message."""
     wanted = {k["enrollment"] for k in _resolve(child)} if child else None
     copies = []
