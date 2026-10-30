@@ -720,17 +720,30 @@ def school_digest(days_back: int = 14, max_messages: int = 25) -> dict:
 
 
 @mcp.tool()
-def mark_digested(message_ids: list[int]) -> dict:
-    """Record that these messages were processed by the digest, so school_digest skips them.
+def mark_digested(decisions: list[dict]) -> dict:
+    """Record that messages were processed by the digest, so school_digest skips them.
 
-    Local bookkeeping only: nothing is sent to iPasen and the messages stay unread in the app.
+    Give ONE decision per message returned by school_digest (including the ignored ones), so
+    nothing is skipped silently. Local bookkeeping only: nothing is sent to iPasen and the
+    messages stay unread in the app. The last decisions are kept in the state file for review.
 
     Args:
-        message_ids: the `id` of every message returned by school_digest (also the ignored ones)
+        decisions: [{"id": <message id>, "outcome": "task" | "event" | "parents" | "nothing" (or
+                   several joined with "+", e.g. "event+parents"), "why": "<short reason>"}]
     """
-    seen = list(dict.fromkeys((_load_state().get("digested_ids") or []) + [int(i) for i in message_ids]))
-    _save_state(digested_ids=seen[-2000:])
-    return {"ok": True, "recorded": len(message_ids)}
+    valid = {"task", "event", "parents", "nothing"}
+    ids, clean = [], []
+    for d in decisions:
+        outcome = str(d.get("outcome", "")).lower().replace(" ", "")
+        if "id" not in d or not outcome or not set(outcome.split("+")) <= valid:
+            raise ValueError(f"Each decision needs id, outcome in {sorted(valid)} (joined with '+') and why; got {d}")
+        ids.append(int(d["id"]))
+        clean.append({"id": int(d["id"]), "outcome": outcome, "why": str(d.get("why", ""))[:200], "at": date.today().isoformat()})
+    state = _load_state()
+    seen = list(dict.fromkeys((state.get("digested_ids") or []) + ids))
+    log = ((state.get("digest_log") or []) + clean)[-300:]
+    _save_state(digested_ids=seen[-2000:], digest_log=log)
+    return {"ok": True, "recorded": len(ids)}
 
 
 # ── ACTIONS ───────────────────────────────────────────────────────────────────
