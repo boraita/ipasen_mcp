@@ -27,7 +27,7 @@ import urllib.request
 from datetime import date
 from pathlib import Path
 
-REPO_RAW = "https://raw.githubusercontent.com/boraita/AI/{ref}/mcp/education/ipasen/"
+REPO_RAW = "https://raw.githubusercontent.com/boraita/ipasen_mcp/{ref}/"
 FILES = ["server.py", "requirements.txt", "ACTIONS.md", "README.md", "CLIENTS.md", "clients/openclaw/SKILL.template.md"]
 ACTIONS = ["report_absence", "delete_absence_report", "justify_absence", "delete_justification", "answer_authorization",
            "sign_document", "decline_document", "update_message", "tag_message", "send_message", "reply_message",
@@ -229,8 +229,8 @@ def main() -> None:
     p.add_argument("--telegram-bot-token-env", default="", help="env var holding a bot token, instead of OpenClaw's")
     p.add_argument("--read-only", action="store_true", help="force read-only even if Telegram was enabled before")
     p.add_argument("--install-dir", default="", help="default ~/mcp/<name>")
-    p.add_argument("--ref", default="main", help="git ref of boraita/AI to download (default main)")
-    p.add_argument("--source", default="", help="copy files from this local checkout of mcp/education/ipasen instead of downloading")
+    p.add_argument("--ref", default="main", help="git ref of boraita/ipasen_mcp to download (default main)")
+    p.add_argument("--source", default="", help="copy files from this local checkout of ipasen_mcp instead of downloading")
     p.add_argument("--uninstall", action="store_true", help="remove the server, its skill and (with --purge) its data")
     p.add_argument("--purge", action="store_true", help="with --uninstall, also delete credentials and session")
     args = p.parse_args()

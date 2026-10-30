@@ -44,7 +44,7 @@ The older `seneca/jsp/pasendroid/` API (used by 2021-era projects) is no longer 
 Requires Python ≥ 3.10.
 
 ```bash
-cd mcp/education/ipasen
+git clone https://github.com/boraita/ipasen_mcp.git && cd ipasen_mcp
 python3 -m venv venv && venv/bin/pip install -r requirements.txt
 
 mkdir -p ~/.config/ipasen-mcp && chmod 700 ~/.config/ipasen-mcp
@@ -82,7 +82,8 @@ Data from the school (subjects, weekdays, absence reasons) comes in Spanish.
 | `ACTIONS.md` | how actions work and how to use each one safely |
 | `CLIENTS.md` | connecting any MCP client; multiple accounts; keeping agents safe |
 | `clients/openclaw/` | OpenClaw installer, AI-oriented install guide and skill template |
+| `requirements.txt` | Python dependencies (`mcp<2`, `httpx`) |
 
 ## License
 
-[MIT](LICENSE) — applies to the files in this folder only.
+[MIT](LICENSE).

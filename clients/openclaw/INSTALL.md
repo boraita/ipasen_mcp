@@ -9,7 +9,7 @@ teachers with a confirmation code that only they receive.
 Copy and send this to your agent:
 
 > Install the iPasen MCP for me following
-> https://github.com/boraita/AI/blob/main/mcp/education/ipasen/clients/openclaw/INSTALL.md
+> https://github.com/boraita/ipasen_mcp/blob/main/clients/openclaw/INSTALL.md
 > — read it entirely before running anything, and ask me whatever you need.
 
 The agent will ask you for your iPasen username and password, whether you want actions
@@ -57,7 +57,7 @@ If Python is older than 3.10 and `uv` is missing, install uv without sudo:
 
 ```bash
 mkdir -p ~/mcp && cd ~/mcp
-curl -fsSLO https://raw.githubusercontent.com/boraita/AI/main/mcp/education/ipasen/clients/openclaw/install.py
+curl -fsSLO https://raw.githubusercontent.com/boraita/ipasen_mcp/main/clients/openclaw/install.py
 python3 install.py --help
 ```
 Skim `install.py` before running it (it is short, standard library only).

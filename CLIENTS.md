@@ -106,7 +106,7 @@ Inventory: 39 non-action tools (37 queries + `login`/`logout`) and 16 actions (7
 ```bash
 claude mcp add ipasen-mcp -s user -- ~/mcp/ipasen/venv/bin/python ~/mcp/ipasen/server.py
 ```
-(or run `./install.sh` at the repository root). Keep the action tools behind permission prompts:
+Keep the action tools behind permission prompts:
 do not auto-allow `mcp__ipasen-mcp__*` and do not use bypass-permissions mode if you want each
 action approved — otherwise switch to `telegram` mode.
 
