@@ -82,3 +82,7 @@ Data from the school (subjects, weekdays, absence reasons) comes in Spanish.
 | `ACTIONS.md` | how actions work and how to use each one safely |
 | `CLIENTS.md` | connecting any MCP client; multiple accounts; keeping agents safe |
 | `clients/openclaw/` | OpenClaw installer, AI-oriented install guide and skill template |
+
+## License
+
+[MIT](LICENSE) — applies to the files in this folder only.
