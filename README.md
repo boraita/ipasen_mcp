@@ -32,7 +32,7 @@ justify absences, answer authorizations, reply to teachers, book parent-teacher 
   child are merged into one.
 - Two-factor authentication with trusted devices; several accounts (e.g. both parents) side by side.
 - MCP tool annotations: queries are `readOnlyHint`, irreversible actions `destructiveHint`.
-- **Digest for scheduled jobs** (`school_digest` + `mark_digested`): each school message is seen once, e.g. to turn it into tasks and calendar events.
+- **Digest for scheduled jobs** (`school_digest` + `mark_digested`): each school message, new or changed grade, new assessed activity, home-screen notice and pending signature is seen once, e.g. to turn it into tasks and calendar events.
 - **OpenClaw installer** that your OpenClaw agent can run by itself.
 
 ---
@@ -262,7 +262,7 @@ Advice for keeping agents safe: [CLIENTS.md](CLIENTS.md).
 | `pickup_people`, `student_profile`, `school_history`, `textbooks`, `access_keys`, `scholarships`, `documents_to_sign`, `my_data` | what the name says |
 | `absence_slots`, `message_recipients`, `message_tags`, `tutorship_slots` | helpers to prepare actions |
 | `raw_get` | any other GET endpoint of the API |
-| `school_digest` / `mark_digested` | for scheduled jobs: messages not yet processed (full text) / record them as processed (local only, the app's read state is untouched) |
+| `school_digest` / `mark_digested` | for scheduled jobs: messages, grades, assessed activities, home notices and pending signatures not yet processed / record them as processed (local only, the app's read state is untouched) |
 | `login`, `logout` | session handling (normally automatic) |
 
 ### Actions (preview → confirm)

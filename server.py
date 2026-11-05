@@ -421,7 +421,9 @@ def activity_grades(enrollment: str, subject: str = "", only_graded: bool = Fals
             if subject and _fold(subject) not in _fold(s.get("name", "")):
                 continue
             for a in s.get("activities", []):
-                scores = [n for d in a.get("diary_score", []) for n in d.get("note_array", [])]
+                # Criterion grades come per delivery (diary_score) or, for some activities, directly on the activity.
+                scores = [n for d in a.get("diary_score", []) for n in d.get("note_array") or []]
+                scores += [n for n in a.get("note_array") or [] if n.get("note") is not None]
                 overall = [d["note"] for d in a.get("diary_score", []) if d.get("note")]
                 comments = [d["comment"] for d in a.get("diary_score", []) if d.get("comment")]
                 if only_graded and not scores and not overall:
@@ -679,11 +681,13 @@ def raw_get(path: str, params: dict | None = None):
 
 @mcp.tool()
 def school_digest(days_back: int = 14, max_messages: int = 25) -> dict:
-    """New school messages not yet processed by the digest, with their full text. Read-only.
+    """New school items not yet processed by the digest. Read-only towards iPasen.
 
-    Meant for a scheduled job: read the messages, act on them, then call mark_digested with
-    their ids so they are not returned again. The first time, only messages from the last
-    `days_back` days are considered.
+    Returns new messages (full text), new or changed grades, new assessed activities still without
+    a grade (exams, assignments), home-screen notices (e.g. e-voting)
+    and documents pending signature. Meant for a scheduled job: act on them, then call
+    mark_digested with ALL their ids so they are not returned again. The first time, only
+    messages from the last `days_back` days are considered.
 
     Args:
         days_back: how far back to look on the first run, or after a long pause (default 14)
@@ -711,12 +715,85 @@ def school_digest(days_back: int = 14, max_messages: int = 25) -> dict:
             break
     fresh = [m for m in found.values() if m.get("date") and _date(m["date"][:10]) >= cutoff]
     fresh.sort(key=lambda m: _iso(m["date"][:10]))
+    home = _get("generales/home")[0]
     return {
         "today": date.today().strftime("%A %d/%m/%Y"),
         "children": [{"child": k.get("simpleName"), "course": k.get("course"), "group": k.get("unity")} for k in _children()],
         "messages": fresh[:max_messages],
         "more": len(fresh) > max_messages,
+        "grades": _digest_grades(seen),
+        "activities": _digest_activities(seen),
+        "notices": [
+            {"id": f"notice:{p.get('id')}", "title": p.get("title"), "message": p.get("message"), "text": _text(p.get("detail") or "")[:1500]}
+            for p in home.get("processes") or [] if f"notice:{p.get('id')}" not in seen
+        ],
+        "signatures": _digest_signatures(home, seen),
     }
+
+
+def _digest_grades(seen: set) -> list:
+    """Graded activities whose grade is new or changed. The id changes when the grade changes.
+
+    The first time, grades that already existed are recorded as seen (no flood of old grades),
+    except those of activities from the last 3 days.
+    """
+    items = []
+    for k in _children():
+        for r in activity_grades(k["enrollment"], only_graded=True):
+            key = json.dumps([k["enrollment"], r.get("period"), r.get("subject"), r.get("activity"), r.get("date"),
+                              r.get("grade"), [c.get("grade") for c in r.get("criteria_grades", [])]], ensure_ascii=False)
+            gid = "grade:" + hashlib.sha1(key.encode()).hexdigest()[:16]
+            if gid not in seen:
+                items.append({"id": gid, "child": k.get("simpleName"), **{f: r[f] for f in
+                              ("subject", "activity", "type", "date", "grade", "criteria_grades", "comment") if f in r}})
+    state = _load_state()
+    if not state.get("grades_baselined"):
+        recent = date.today() - timedelta(days=3)
+        old = [g["id"] for g in items if not g.get("date") or _date(g["date"]) < recent]
+        _save_state(digested_ids=list(dict.fromkeys((state.get("digested_ids") or []) + old)), grades_baselined=True)
+        items = [g for g in items if g["id"] not in old]
+    for g in items:
+        g["criteria_grades"] = [c.get("grade") for c in g.get("criteria_grades", [])]
+    return items
+
+
+def _digest_activities(seen: set) -> list:
+    """Assessed activities (exams, assignments...) that appeared in the gradebook and have no grade yet.
+
+    Once graded they show up in the grades list instead. The first time, activities older than
+    3 days are recorded as seen.
+    """
+    items = []
+    for k in _children():
+        for r in activity_grades(k["enrollment"]):
+            if "grade" in r or r.get("criteria_grades"):
+                continue
+            key = json.dumps([k["enrollment"], r.get("period"), r.get("subject"), r.get("activity"), r.get("date")], ensure_ascii=False)
+            aid = "activity:" + hashlib.sha1(key.encode()).hexdigest()[:16]
+            if aid not in seen:
+                items.append({"id": aid, "child": k.get("simpleName"),
+                              **{f: r[f] for f in ("subject", "activity", "type", "date", "teacher") if f in r}})
+    state = _load_state()
+    if not state.get("activities_baselined"):
+        recent = date.today() - timedelta(days=3)
+        old = [a["id"] for a in items if not a.get("date") or _date(a["date"]) < recent]
+        _save_state(digested_ids=list(dict.fromkeys((state.get("digested_ids") or []) + old)), activities_baselined=True)
+        items = [a for a in items if a["id"] not in old]
+    return items
+
+
+def _digest_signatures(home: dict, seen: set) -> list:
+    """Documents pending signature. The inbox endpoint often times out; then the home counter is reported."""
+    count = next((n.get("count", 0) for n in home.get("notifications") or [] if n.get("type") == "FIRMAS"), 0)
+    if not count:
+        return []
+    try:
+        docs = [d for s in _get("firma/ipasen/bandeja-firma", typeState="P", enrollment="", page=1) for d in s.get("documents", [])]
+    except Exception:
+        return [{"id": f"signatures:{date.today().isoformat()}:{count}", "documents_pending": count,
+                 "note": "the list could not be loaded; check the signature inbox in the app"}]
+    return [{"id": f"sign:{d.get('id')}", "document": d.get("description"), "sent_by": d.get("sendBy")}
+            for d in docs if f"sign:{d.get('id')}" not in seen]
 
 
 @mcp.tool()
@@ -728,7 +805,7 @@ def mark_digested(decisions: list[dict]) -> dict:
     messages stay unread in the app. The last decisions are kept in the state file for review.
 
     Args:
-        decisions: [{"id": <message id>, "outcome": "task" | "event" | "parents" | "nothing" (or
+        decisions: [{"id": <message, grade, notice or signature id>, "outcome": "task" | "event" | "parents" | "nothing" (or
                    several joined with "+", e.g. "event+parents"), "why": "<short reason>"}]
     """
     valid = {"task", "event", "parents", "nothing"}
@@ -737,8 +814,10 @@ def mark_digested(decisions: list[dict]) -> dict:
         outcome = str(d.get("outcome", "")).lower().replace(" ", "")
         if "id" not in d or not outcome or not set(outcome.split("+")) <= valid:
             raise ValueError(f"Each decision needs id, outcome in {sorted(valid)} (joined with '+') and why; got {d}")
-        ids.append(int(d["id"]))
-        clean.append({"id": int(d["id"]), "outcome": outcome, "why": str(d.get("why", ""))[:200], "at": date.today().isoformat()})
+        # Messages have numeric ids; grades, notices and signatures have "kind:..." string ids.
+        item_id = int(d["id"]) if str(d["id"]).isdigit() else str(d["id"])
+        ids.append(item_id)
+        clean.append({"id": item_id, "outcome": outcome, "why": str(d.get("why", ""))[:200], "at": date.today().isoformat()})
     state = _load_state()
     seen = list(dict.fromkeys((state.get("digested_ids") or []) + ids))
     log = ((state.get("digest_log") or []) + clean)[-300:]
