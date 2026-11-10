@@ -48,6 +48,20 @@ Rules for ACTIONS (every tool whose description starts with "ACTION"):
 Full guide: ACTIONS.md next to server.py.
 """)
 
+# MCP tool annotations: every tool declares all four hints explicitly.
+#   read-only     queries that call the iPasen API
+#   local         only touch the local state file (no network)
+#   additive      actions that create something new (absence report, message, meeting...)
+#   destructive   actions that delete, overwrite or irreversibly answer something
+#   idempotent    actions where repeating the same call changes nothing more
+READ_ONLY = ToolAnnotations(readOnlyHint=True, destructiveHint=False, idempotentHint=True, openWorldHint=True)
+SESSION = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True)
+LOCAL_STATE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=False)
+ADDITIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=False, openWorldHint=True)
+DESTRUCTIVE = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=False, openWorldHint=True)
+DESTRUCTIVE_IDEMPOTENT = ToolAnnotations(readOnlyHint=False, destructiveHint=True, idempotentHint=True, openWorldHint=True)
+SETTING = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True)
+
 _client = httpx.Client(
     base_url=BASE_URL,
     headers={"Accept-Charset": "utf-8", "User-agent": USER_AGENT},
@@ -225,7 +239,7 @@ def _iso(day: str) -> str:
 
 # ── ACCOUNT ───────────────────────────────────────────────────────────────────
 
-@mcp.tool()
+@mcp.tool(annotations=SESSION)
 def login(code: str = "", trust_device: bool = True) -> dict:
     """Log in to iPasen with IPASEN_USER/IPASEN_PASSWORD (normally automatic).
 
@@ -239,7 +253,7 @@ def login(code: str = "", trust_device: bool = True) -> dict:
     return _token_login(code, trust_device)
 
 
-@mcp.tool()
+@mcp.tool(annotations=LOCAL_STATE)
 def logout() -> dict:
     """Forget the stored token (keeps the 2FA device trust)."""
     _save_state(access_token=None, two_factor_token=None)
@@ -247,7 +261,7 @@ def logout() -> dict:
     return {"ok": True}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def children() -> list:
     """Children linked to the account: name, year, class group, tutor, school and enrollment number.
 
@@ -270,7 +284,7 @@ def children() -> list:
     ]
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def my_data() -> dict:
     """Personal and contact details of the legal guardian (account holder)."""
     return _get("generales/get-datos-usuario")
@@ -278,7 +292,7 @@ def my_data() -> dict:
 
 # ── SUMMARY / AGENDA ──────────────────────────────────────────────────────────
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def upcoming_events(days: int = 30, start: str = "") -> list:
     """Agenda: holidays, trips, exams and school events in the coming days.
 
@@ -294,7 +308,7 @@ def upcoming_events(days: int = 30, start: str = "") -> list:
     ]
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def overview(child: str = "") -> dict:
     """Quick summary: unread messages, upcoming events (14 days), absences, latest grades and
     authorizations waiting for a signature. Good first query of the day.
@@ -329,13 +343,13 @@ def overview(child: str = "") -> dict:
 _WEEKDAYS = {"monday": "lunes", "tuesday": "martes", "wednesday": "miercoles", "thursday": "jueves", "friday": "viernes"}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def student_profile(child: str = "") -> dict:
     """Student record (personal data, enrollment, address, contacts)."""
     return _per_child(child, lambda k: _get("seguimiento/datos-alumno", enrollment=k["enrollment"]))
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def schedule(child: str = "", day: str = "") -> dict:
     """Weekly timetable: time slot, subject and teacher, grouped by day.
 
@@ -355,7 +369,7 @@ def schedule(child: str = "", day: str = "") -> dict:
     return _per_child(child, fetch)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def tutor(child: str = "") -> dict:
     """Class tutor, their office hours for families and the teaching team per subject."""
     def fetch(k):
@@ -369,13 +383,13 @@ def tutor(child: str = "") -> dict:
     return _per_child(child, fetch)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def absences(child: str = "") -> dict:
     """Absences and late arrivals recorded by the school, with their justification status."""
     return _per_child(child, lambda k: _get("faltas/get-faltas", enrollment=k["enrollment"]))
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def absence_notices(child: str = "") -> dict:
     """Absences reported by the family (doctor appointments, etc.) and the time slots affected."""
     def fetch(k):
@@ -393,7 +407,7 @@ def absence_notices(child: str = "") -> dict:
     return _per_child(child, fetch)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def subjects(child: str = "") -> dict:
     """Enrolled subjects with their status (passed, pending...) and subject code."""
     def fetch(k):
@@ -405,7 +419,7 @@ def subjects(child: str = "") -> dict:
     return _per_child(child, fetch)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def term_grades(child: str = "") -> dict:
     """Grading periods of the year (1st, 2nd, 3rd, final) with dates and, once the school
     publishes them, the grades of each period."""
@@ -443,7 +457,7 @@ def activity_grades(enrollment: str, subject: str = "", only_graded: bool = Fals
     return [{k: v for k, v in r.items() if v not in (None, [], "")} for r in rows]
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def grades(child: str = "", subject: str = "", only_graded: bool = True, period: str = "") -> dict:
     """Grades of exams, assignments and assessed activities (teacher's gradebook),
     including the grade of each assessment criterion.
@@ -457,19 +471,19 @@ def grades(child: str = "", subject: str = "", only_graded: bool = True, period:
     return _per_child(child, lambda k: activity_grades(k["enrollment"], subject, only_graded, period))
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def observations(child: str = "") -> dict:
     """Notes written by teachers about the student."""
     return _per_child(child, lambda k: _get("seguimiento/observaciones", enrollment=k["enrollment"]))
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def behaviour(child: str = "") -> dict:
     """Behaviour incidents recorded by the school."""
     return _per_child(child, lambda k: _get("seguimiento/get-conductas-contrarias", enrollment=k["enrollment"]))
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def authorizations(child: str = "", only_unsigned: bool = False) -> dict:
     """Activity authorizations (trips, photos, outings): signed or pending.
 
@@ -487,37 +501,37 @@ def authorizations(child: str = "", only_unsigned: bool = False) -> dict:
     return _per_child(child, fetch)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def authorization_detail(authorization_id: str) -> dict:
     """Details of one authorization (id = `id` field from authorizations)."""
     return _get("seguimiento/get-det-aut-act", aluatprotut=authorization_id)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def pickup_people(child: str = "") -> dict:
     """People authorized to pick the student up from school."""
     return _per_child(child, lambda k: _get("seguimiento/get-per-aut-rec-alu", enrollment=k["enrollment"]))
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def school_services(child: str = "") -> dict:
     """Contracted services: lunch, early-morning care, after-school activities, with schedule and monthly price."""
     return _per_child(child, lambda k: _get("centros/servicios-centro", enrollment=k["enrollment"]))
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def school_history(child: str = "") -> dict:
     """School history: previous years, schools and results."""
     return _per_child(child, lambda k: _get("seguimiento/trayectoria-escolar", enrollment=k["enrollment"]))
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def textbooks(child: str = "") -> dict:
     """Textbooks from the free-textbook programme (vouchers / digital licences)."""
     return _per_child(child, lambda k: _get("horarios/libros-texto", enrollment=k["enrollment"]))
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def tutorships(child: str = "", only_active: bool | None = None) -> dict:
     """Parent-teacher meetings requested or scheduled, and teachers available for them."""
     return _per_child(child, lambda k: {
@@ -526,19 +540,19 @@ def tutorships(child: str = "", only_active: bool | None = None) -> dict:
     })
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def access_keys(child: str = "") -> dict:
     """The student's education accounts (iANDE, Moodle...) and their links."""
     return _per_child(child, lambda k: _get("usuarios/mis-claves", enrollment=k["enrollment"]))
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def scholarships(child: str = "") -> dict:
     """Scholarships and grants applied for or awarded."""
     return _per_child(child, lambda k: _get("centros/get-becas", enrollment=k["enrollment"]))
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def documents_to_sign(state: str = "pending") -> list:
     """School documents in the signature inbox.
 
@@ -551,7 +565,7 @@ def documents_to_sign(state: str = "pending") -> list:
 
 # ── SCHOOL ────────────────────────────────────────────────────────────────────
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def school_info(child: str = "") -> dict:
     """Each child's school: name, phone, website, year and class group.
 
@@ -566,7 +580,7 @@ def school_info(child: str = "") -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def school_calendar(child: str = "") -> list:
     """Official school calendar: holidays, start/end of terms and breaks."""
     code = _resolve(child)[0]["centerCode"]
@@ -576,7 +590,7 @@ def school_calendar(child: str = "") -> list:
     ]
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def notice_board(child: str = "") -> dict:
     """School notice board."""
     return _per_child(child, lambda k: _get("centros/get-tablon-anuncios", enrollment=k["enrollment"], centercode=k["centerCode"]))
@@ -584,7 +598,7 @@ def notice_board(child: str = "") -> dict:
 
 # ── MESSAGES ──────────────────────────────────────────────────────────────────
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def messages(page: int = 1, unread_only: bool = False, child: str = "", search: str = "") -> list:
     """Messages received from the school and teachers (newest first), with a short preview.
 
@@ -618,7 +632,7 @@ def messages(page: int = 1, unread_only: bool = False, child: str = "", search: 
     return list(merged.values())
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def read_message(message_id: int) -> dict:
     """Full text of a message and its replies (does not mark it as read).
 
@@ -646,25 +660,25 @@ def read_message(message_id: int) -> dict:
     }
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def sent_messages(page: int = 1) -> list:
     """Messages sent by the account holder."""
     return _get("mensajeria/get-mensajes-salida", page=page)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def notifications(page: int = 1) -> list:
     """Automatic notifications inbox (absences, published grades...)."""
     return _get("mensajeria/get-bandeja-notificaciones", page=page)
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def news() -> list:
     """General announcements from the regional education authority or the school."""
     return _get("mensajeria/avisos")
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def raw_get(path: str, params: dict | None = None):
     """Generic GET to the iPasen API for endpoints not covered above (read-only).
 
@@ -679,7 +693,7 @@ def raw_get(path: str, params: dict | None = None):
 # Lets a cron job see each school message once. Bookkeeping is local (state file);
 # nothing is sent to iPasen and the messages' read state is not touched.
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def school_digest(days_back: int = 14, max_messages: int = 25) -> dict:
     """New school items not yet processed by the digest. Read-only towards iPasen.
 
@@ -796,7 +810,7 @@ def _digest_signatures(home: dict, seen: set) -> list:
             for d in docs if f"sign:{d.get('id')}" not in seen]
 
 
-@mcp.tool()
+@mcp.tool(annotations=LOCAL_STATE)
 def mark_digested(decisions: list[dict]) -> dict:
     """Record that messages were processed by the digest, so school_digest skips them.
 
@@ -990,7 +1004,7 @@ def _guard(fn):
 
 # ── Absences ──────────────────────────────────────────────────────────────────
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def absence_slots(child: str, day: str) -> list:
     """Time slots of one specific day (to report a partial-day absence). Read-only.
 
@@ -1003,7 +1017,7 @@ def absence_slots(child: str, day: str) -> list:
             for s in _get("horarios/get-horario", enrollment=k["enrollment"], date=_date(day).strftime("%d/%m/%Y"))]
 
 
-@mcp.tool()
+@mcp.tool(annotations=ADDITIVE)
 @_guard
 def report_absence(child: str, start: str, end: str = "", times: list[str] | None = None,
                    observations: str = "", confirm_code: str = "") -> dict:
@@ -1047,7 +1061,7 @@ def report_absence(child: str, start: str, end: str = "", times: list[str] | Non
     return _send("Report absence", "faltas/nueva-falta", preview, confirm_code, json_body=body) or _post("faltas/nueva-falta", json_body=body)
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 @_guard
 def delete_absence_report(child: str, report_id: int, confirm_code: str = "") -> dict:
     """ACTION · Delete an absence reported by the family (the one from report_absence).
@@ -1070,7 +1084,7 @@ def _absence_items(k: dict) -> list[dict]:
     return [i for sec in _get("faltas/get-faltas", enrollment=k["enrollment"]) for i in sec.get("items", [])]
 
 
-@mcp.tool()
+@mcp.tool(annotations=ADDITIVE)
 @_guard
 def justify_absence(child: str, absence_code: str, reason: str, observations: str = "",
                     attachment_path: str = "", confirm_code: str = "") -> dict:
@@ -1105,7 +1119,7 @@ def justify_absence(child: str, absence_code: str, reason: str, observations: st
     return _post("faltas/justificar-falta", files=files)
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 @_guard
 def delete_justification(child: str, absence_code: str, confirm_code: str = "") -> dict:
     """ACTION · Withdraw the justification sent for an absence (it becomes unjustified again).
@@ -1125,7 +1139,7 @@ def delete_justification(child: str, absence_code: str, confirm_code: str = "") 
 
 # ── Authorizations and documents ──────────────────────────────────────────────
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 @_guard
 def answer_authorization(child: str, authorization_id: str, authorize: bool, comments: str = "", confirm_code: str = "") -> dict:
     """ACTION · Authorize (authorize=True) or NOT authorize (False) an activity or trip.
@@ -1160,7 +1174,7 @@ def _pending_document(document_id: int) -> dict:
     raise _Abort(f"Document {document_id} not found in the signature inbox (documents_to_sign())")
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 @_guard
 def sign_document(child: str, document_id: int, signature_png: str, confirm_code: str = "") -> dict:
     """ACTION · Sign a document in the signature inbox with a handwritten signature (PNG image).
@@ -1184,7 +1198,7 @@ def sign_document(child: str, document_id: int, signature_png: str, confirm_code
     return _send("Sign document", "firma/firma-manuscrita-documento", preview, confirm_code, json_body=body) or _post("firma/firma-manuscrita-documento", json_body=body)
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 @_guard
 def decline_document(document_id: int, reason: str, confirm_code: str = "") -> dict:
     """ACTION · Decline (refuse to sign) a document in the signature inbox. Cannot be undone.
@@ -1204,7 +1218,7 @@ def decline_document(document_id: int, reason: str, confirm_code: str = "") -> d
 
 # ── Messages ──────────────────────────────────────────────────────────────────
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE_IDEMPOTENT)
 @_guard
 def update_message(message_id: int, change: str, child: str = "", confirm_code: str = "") -> dict:
     """ACTION · Change the state of a received message.
@@ -1232,13 +1246,13 @@ def update_message(message_id: int, change: str, child: str = "", confirm_code: 
     return {"status": "SENT", "copies": [_post("mensajeria/gestion-mensajeria", json_body=b)["server_response"] for b in bodies]}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def message_tags() -> list:
     """Personal tags available to classify messages. Read-only."""
     return _get("mensajeria/etiquetas")
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE_IDEMPOTENT)
 @_guard
 def tag_message(message_id: int, tags: list[str], confirm_code: str = "") -> dict:
     """ACTION · Set the tags of a message (replaces existing ones; empty list = remove all).
@@ -1262,7 +1276,7 @@ def tag_message(message_id: int, tags: list[str], confirm_code: str = "") -> dic
     return {"status": "SENT", "copies": [_post("mensajeria/gestion-mensajeria", json_body=b)["server_response"] for b in bodies]}
 
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def message_recipients(child: str) -> list:
     """Teachers/groups you can write to about a student. Read-only."""
     k = _one(child)
@@ -1270,7 +1284,7 @@ def message_recipients(child: str) -> list:
             for g in _get("mensajeria/get-colectivos", enrollment=k["enrollment"])]
 
 
-@mcp.tool()
+@mcp.tool(annotations=ADDITIVE)
 @_guard
 def send_message(child: str, to: list[str], subject: str, text: str, attachment_paths: list[str] | None = None,
                  allow_response: bool = True, confirm_code: str = "") -> dict:
@@ -1313,7 +1327,7 @@ def send_message(child: str, to: list[str], subject: str, text: str, attachment_
     return _post("mensajeria/enviar-nuevo-mensaje", files=multipart)
 
 
-@mcp.tool()
+@mcp.tool(annotations=ADDITIVE)
 @_guard
 def reply_message(message_id: int, text: str, child: str = "", attachment_paths: list[str] | None = None, confirm_code: str = "") -> dict:
     """ACTION · Reply to a received message (goes to the sender). Cannot be undone once sent.
@@ -1342,7 +1356,7 @@ def reply_message(message_id: int, text: str, child: str = "", attachment_paths:
 
 # ── Parent-teacher meetings ───────────────────────────────────────────────────
 
-@mcp.tool()
+@mcp.tool(annotations=READ_ONLY)
 def tutorship_slots(child: str, teacher: str, start: str = "", end: str = "") -> list:
     """Free slots to request a meeting with a teacher. Read-only.
 
@@ -1372,7 +1386,7 @@ def _slots(t: dict, first: date, last: date) -> list:
     return _get("horarios/ipasen/horas-tutoria", teacherId=t["id"], startDate=first.isoformat(), endDate=last.isoformat(), datetomapos=since)
 
 
-@mcp.tool()
+@mcp.tool(annotations=ADDITIVE)
 @_guard
 def request_tutorship(child: str, teacher: str, day: str, time: str, online: bool = False, message: str = "",
                       reminder: bool = True, confirm_code: str = "") -> dict:
@@ -1412,7 +1426,7 @@ def _tutorship(child: str, tutorship_id: int) -> tuple[dict, dict]:
     return k, match[0]
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 @_guard
 def cancel_tutorship(child: str, tutorship_id: int, comment: str = "", confirm_code: str = "") -> dict:
     """ACTION · Cancel a requested or scheduled meeting.
@@ -1429,7 +1443,7 @@ def cancel_tutorship(child: str, tutorship_id: int, comment: str = "", confirm_c
     return _send("Cancel meeting", "horarios/ipasen/cancelar-tutorias", preview, confirm_code, json_body=body) or _post("horarios/ipasen/cancelar-tutorias", json_body=body)
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 @_guard
 def answer_tutorship(child: str, tutorship_id: int, accept: bool, comment: str = "", confirm_code: str = "") -> dict:
     """ACTION · Accept or decline a meeting PROPOSED by a teacher.
@@ -1449,7 +1463,7 @@ def answer_tutorship(child: str, tutorship_id: int, accept: bool, comment: str =
 
 # ── Follow-up ─────────────────────────────────────────────────────────────────
 
-@mcp.tool()
+@mcp.tool(annotations=SETTING)
 @_guard
 def mark_observation(child: str, observation_id: str, read: bool = True, confirm_code: str = "") -> dict:
     """ACTION · Mark a teacher's note as read (or unread). Can be undone.
@@ -1468,7 +1482,7 @@ def mark_observation(child: str, observation_id: str, read: bool = True, confirm
     return _send("Mark note", "seguimiento/gestion-observaciones", preview, confirm_code, json_body=body) or _post("seguimiento/gestion-observaciones", json_body=body)
 
 
-@mcp.tool()
+@mcp.tool(annotations=DESTRUCTIVE)
 @_guard
 def manage_pickup_person(child: str, operation: str, document_id: str, name: str = "", lastname: str = "",
                          second_lastname: str = "", phone: str = "", confirm_code: str = "") -> dict:
@@ -1500,20 +1514,6 @@ def manage_pickup_person(child: str, operation: str, document_id: str, name: str
                "person": f'{person["name"]} {person["lastname"]} {person["secondlastname"] or ""}'.strip(),
                "document": f'{ident} ({"DNI/NIE" if is_dni_nie else "passport"})', "phone": person["tlf"]}
     return _send("Authorized pickup person", "seguimiento/gestion-per-aut-rec-alu", preview, confirm_code, json_body=person) or _post("seguimiento/gestion-per-aut-rec-alu", json_body=person)
-
-
-# Actions that another action can undo; every other action is flagged destructive.
-_REVERSIBLE = {"report_absence", "justify_absence", "update_message", "tag_message", "request_tutorship",
-               "mark_observation", "manage_pickup_person"}
-for _tool in mcp._tool_manager.list_tools():
-    if _tool.description.startswith("ACTION"):
-        _tool.annotations = ToolAnnotations(readOnlyHint=False, destructiveHint=_tool.name not in _REVERSIBLE,
-                                            idempotentHint=False, openWorldHint=True)
-    elif _tool.name in ("login", "logout", "mark_digested"):
-        _tool.annotations = ToolAnnotations(readOnlyHint=False, destructiveHint=False, idempotentHint=True, openWorldHint=True)
-    else:
-        _tool.annotations = ToolAnnotations(readOnlyHint=True, openWorldHint=True)
-
 
 if __name__ == "__main__":
     mcp.run()

@@ -322,12 +322,25 @@ Known server quirks:
   oldest first); `read_message` picks the requested message from it.
 - "Administrador PASEN" notices are regenerated on every request and keep no read state.
 
+## Tests
+
+```bash
+venv/bin/pip install -r requirements-dev.txt
+venv/bin/python -m pytest -q
+```
+
+The suite runs every one of the 57 tools through the MCP layer against an in-memory fake of the
+iPasen API (`tests/fake_api.py`, invented data, no network), and checks the tool annotations, the
+preview/confirm gate in both modes (inline and Telegram, including single-use codes and lockout),
+per-child message copies, the digest and input validation. It runs on every push (GitHub Actions).
+
 ## Files
 
 | File | Purpose |
 |---|---|
 | `server.py` | the MCP server (FastMCP, stdio) |
-| `requirements.txt` | Python dependencies (`mcp<2`, `httpx`) |
+| `requirements.txt` | Python dependencies (`mcp<2`, `httpx`); `requirements-dev.txt` adds `pytest` |
+| `tests/` | test suite with a fake iPasen API |
 | `ACTIONS.md` | action rules, where each id comes from, per-action details |
 | `CLIENTS.md` | client integration in depth, multiple accounts, keeping agents safe |
 | `clients/openclaw/` | OpenClaw installer (`install.py`), agent-oriented guide (`INSTALL.md`), skill template |
