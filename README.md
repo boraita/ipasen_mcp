@@ -33,7 +33,8 @@ justify absences, answer authorizations, reply to teachers, book parent-teacher 
 - Two-factor authentication with trusted devices; several accounts (e.g. both parents) side by side.
 - MCP tool annotations: queries are `readOnlyHint`, irreversible actions `destructiveHint`.
 - **Digest for scheduled jobs** (`school_digest` + `mark_digested`): each school message, new or changed grade, new assessed activity, home-screen notice and pending signature is seen once, e.g. to turn it into tasks and calendar events.
-- **OpenClaw installer** that your OpenClaw agent can run by itself.
+- **OpenClaw installer** that your OpenClaw agent can run by itself, plus a ready-made
+  [morning/evening school digest](clients/openclaw/CRON.md) that turns messages into tasks and calendar events.
 
 ---
 
@@ -343,7 +344,7 @@ per-child message copies, the digest and input validation. It runs on every push
 | `tests/` | test suite with a fake iPasen API |
 | `ACTIONS.md` | action rules, where each id comes from, per-action details |
 | `CLIENTS.md` | client integration in depth, multiple accounts, keeping agents safe |
-| `clients/openclaw/` | OpenClaw installer (`install.py`), agent-oriented guide (`INSTALL.md`), skill template |
+| `clients/openclaw/` | OpenClaw installer (`install.py`), agent-oriented guide (`INSTALL.md`), skill template, school digest cron (`CRON.md`, `cron/`) |
 
 ## License
 

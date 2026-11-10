@@ -101,7 +101,12 @@ Start a new session so the skill and tools are loaded, then ask yourself, e.g.
 Tell them how to use it: "ask me about grades, absences, messages, trips…", and, if actions are
 on, that you will always show a preview and wait for the code from Telegram.
 
-### 6. Updating later
+### 6. Optional: daily school digest
+
+If the human wants new school messages turned into tasks/calendar events with a short summary
+morning and evening, follow [CRON.md](CRON.md) (ask for the times and who should receive it).
+
+### 7. Updating later
 
 Re-run the same command; it is idempotent (downloads the latest server, keeps credentials,
 rewrites the skill). To change only the mode: add or drop `--telegram-chat-id`, or use `--read-only`.
