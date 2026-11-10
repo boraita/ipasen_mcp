@@ -151,7 +151,9 @@ OpenClaw agent itself can follow it, and it:
   `telegram` confirmation mode (inline mode is never used in OpenClaw);
 - grants or denies the server per agent (`--agent`, `--deny-agent`);
 - writes a skill filled in with the family's data;
-- reloads and probes (`39 tools` read-only, `55 tools` with actions).
+- leaves the registration alone on plain updates (code is reloaded live); on OpenClaw ≥ 2026.10.10,
+  registering or changing the server needs the gateway stopped (`--restart-gateway`);
+- reloads and checks (`39 tools` read-only, `55 tools` with actions).
 
 What it does by hand, for reference:
 
@@ -161,8 +163,9 @@ openclaw mcp add ipasen --command ~/mcp/ipasen/venv/bin/python --arg ~/mcp/ipase
   --cwd ~/mcp/ipasen --env IPASEN_CREDENTIALS_FILE=$HOME/.config/ipasen-mcp/ipasen/credentials.env \
   --env IPASEN_STATE_FILE=$HOME/.config/ipasen-mcp/ipasen/session.json --timeout 90 --connect-timeout 30
 openclaw mcp tools ipasen --exclude "login,logout"     # + every action when read-only
-openclaw mcp reload && openclaw mcp probe
+openclaw mcp reload && openclaw mcp status
 ```
+(On OpenClaw ≥ 2026.10.10 run `mcp add`/`tools`/`probe` with the gateway stopped.)
 
 OpenClaw notes:
 - MCP tools appear as `<server>__<tool>`. An agent with `tools.profile: "full"` sees every server;

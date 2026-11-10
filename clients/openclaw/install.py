@@ -23,6 +23,7 @@ import re
 import shutil
 import subprocess
 import sys
+import time
 import urllib.request
 from datetime import date
 from pathlib import Path
@@ -53,6 +54,54 @@ def run(cmd: list[str], check: bool = True, env: dict | None = None) -> subproce
 
 def openclaw(*args: str, check: bool = True) -> subprocess.CompletedProcess:
     return run([OPENCLAW, *args], check=check)
+
+
+OWNERSHIP_ERROR = "exclusive offline state ownership"
+
+
+def gateway_active() -> bool:
+    return run(["systemctl", "--user", "is-active", "--quiet", "openclaw-gateway"], check=False).returncode == 0
+
+
+def wait_gateway(active: bool, seconds: int = 90) -> None:
+    for _ in range(seconds):
+        if gateway_active() == active:
+            return
+        time.sleep(1)
+    fail(f"the OpenClaw gateway did not {'start' if active else 'stop'} in {seconds}s; check `systemctl --user status openclaw-gateway`")
+
+
+def mutate_mcp(steps: list[list[str]], restart_gateway: bool) -> None:
+    """Run `openclaw mcp` mutations. OpenClaw >= 2026.10.10 only allows them with the gateway
+    stopped ("exclusive offline state ownership"): with --restart-gateway we stop it, apply and
+    start it again; otherwise we stop with instructions."""
+    def apply() -> subprocess.CompletedProcess | None:
+        for cmd in steps:
+            proc = openclaw(*cmd, check=False)
+            if proc.returncode and not (cmd[1] == "unset" and "not found" in (proc.stdout + proc.stderr).lower()):
+                return proc
+        return None
+
+    failed = apply()
+    if failed is None:
+        return
+    if OWNERSHIP_ERROR not in failed.stdout + failed.stderr:
+        fail(f"openclaw {' '.join(failed.args[1:4])}… failed:\n{(failed.stdout + failed.stderr)[-1500:]}")
+    if not restart_gateway:
+        fail("this OpenClaw version only changes MCP servers with the gateway stopped. Re-run with "
+             "--restart-gateway (stops the gateway for a few seconds, applies the change, starts it again), "
+             "or stop it yourself (`systemctl --user stop openclaw-gateway`), re-run, then start it.")
+    step("stopping the OpenClaw gateway to apply the MCP change")
+    run(["systemctl", "--user", "stop", "openclaw-gateway"])
+    try:
+        wait_gateway(False)
+        failed = apply()
+    finally:
+        step("starting the OpenClaw gateway again")
+        run(["systemctl", "--user", "start", "openclaw-gateway"])
+        wait_gateway(True)
+    if failed is not None:
+        fail(f"openclaw {' '.join(failed.args[1:4])}… failed:\n{(failed.stdout + failed.stderr)[-1500:]}")
 
 
 def openclaw_config() -> dict:
@@ -231,6 +280,8 @@ def main() -> None:
     p.add_argument("--install-dir", default="", help="default ~/mcp/<name>")
     p.add_argument("--ref", default="main", help="git ref of boraita/ipasen_mcp to download (default main)")
     p.add_argument("--source", default="", help="copy files from this local checkout of ipasen_mcp instead of downloading")
+    p.add_argument("--restart-gateway", action="store_true",
+                   help="allow stopping/starting the gateway when OpenClaw requires it to change MCP servers")
     p.add_argument("--uninstall", action="store_true", help="remove the server, its skill and (with --purge) its data")
     p.add_argument("--purge", action="store_true", help="with --uninstall, also delete credentials and session")
     args = p.parse_args()
@@ -250,7 +301,8 @@ def main() -> None:
 
     if args.uninstall:
         step(f"removing MCP server '{args.name}'")
-        openclaw("mcp", "unset", args.name, check=False)
+        if args.name in cfg.get("mcp", {}).get("servers", {}):
+            mutate_mcp([["mcp", "unset", args.name]], args.restart_gateway)
         shutil.rmtree(skill_dir, ignore_errors=True)
         if args.purge:
             shutil.rmtree(install_dir, ignore_errors=True)
@@ -293,9 +345,13 @@ def main() -> None:
     if actions_on:
         step(f"enabling actions with Telegram confirmation to chat {args.telegram_chat_id}")
         token = os.getenv(args.telegram_bot_token_env, "") if args.telegram_bot_token_env else telegram_token(cfg, args.telegram_account or None)
+        previous = credentials.read_text() if credentials.exists() else ""
+        newly_enabled = ("IPASEN_CONFIRM_MODE=telegram" not in previous
+                         or f"IPASEN_TELEGRAM_CHAT_ID={args.telegram_chat_id}" not in previous)
         write_settings(credentials, {"IPASEN_CONFIRM_MODE": "telegram", "IPASEN_TELEGRAM_BOT_TOKEN": token,
                                      "IPASEN_TELEGRAM_CHAT_ID": args.telegram_chat_id})
-        server_python(py, install_dir, env, (
+        if newly_enabled:
+            server_python(py, install_dir, env, (
             "import server\n"
             "server._telegram('iPasen MCP (" + args.name + ") installed. Confirmation codes for school actions will arrive "
             "here. Never share them unless you asked for that action.')\n"
@@ -307,12 +363,21 @@ def main() -> None:
     backup = HOME / ".openclaw" / f"openclaw.json.bak-pre-{args.name}-{date.today():%Y%m%d}"
     if not backup.exists():
         shutil.copyfile(HOME / ".openclaw" / "openclaw.json", backup)
-    openclaw("mcp", "unset", args.name, check=False)
-    openclaw("mcp", "add", args.name, "--command", str(py), "--arg", str(install_dir / "server.py"), "--cwd", str(install_dir),
-             "--env", f"IPASEN_CREDENTIALS_FILE={credentials}", "--env", f"IPASEN_STATE_FILE={config_dir / 'session.json'}",
-             "--timeout", "90", "--connect-timeout", "30")
     hidden = ["login", "logout"] + ([] if actions_on else ACTIONS)
-    openclaw("mcp", "tools", args.name, "--exclude", ",".join(hidden))
+    server_env = {"IPASEN_CREDENTIALS_FILE": str(credentials), "IPASEN_STATE_FILE": str(config_dir / "session.json")}
+    current = cfg.get("mcp", {}).get("servers", {}).get(args.name)
+    wanted = {"command": str(py), "args": [str(install_dir / "server.py")], "cwd": str(install_dir), "env": server_env}
+    unchanged = (current is not None and all(current.get(k) == v for k, v in wanted.items())
+                 and set((current.get("toolFilter") or {}).get("exclude") or []) == set(hidden))
+    if unchanged:
+        print("    already registered with the same settings; only the code was updated")
+    else:
+        mutate_mcp(([["mcp", "unset", args.name]] if current is not None else []) + [
+            ["mcp", "add", args.name, "--command", str(py), "--arg", str(install_dir / "server.py"), "--cwd", str(install_dir),
+             "--env", f"IPASEN_CREDENTIALS_FILE={credentials}", "--env", f"IPASEN_STATE_FILE={server_env['IPASEN_STATE_FILE']}",
+             "--timeout", "90", "--connect-timeout", "30", "--no-probe"],
+            ["mcp", "tools", args.name, "--exclude", ",".join(hidden)],
+        ], args.restart_gateway)
 
     for agent in args.agent:
         tools = agent_tools(cfg, agent)
@@ -351,14 +416,14 @@ def main() -> None:
     skill_dir.mkdir(parents=True, exist_ok=True)
     (skill_dir / "SKILL.md").write_text(skill)
 
-    step("reloading and probing")
+    step("reloading and checking")
     openclaw("mcp", "reload", check=False)
-    probe_out = openclaw("mcp", "probe", check=False).stdout
-    line = next((l for l in probe_out.splitlines() if f"{args.name}:" in l), "(not listed)")
-    print(f"    {line.strip()}")
-    expected = 39 + (len(ACTIONS) if actions_on else 0)  # 37 queries + school_digest + mark_digested
-    if f"{expected} tools" not in line:
-        fail(f"expected {expected} tools for {args.name}; check `openclaw mcp probe`")
+    total = int(server_python(py, install_dir, env, "import asyncio, server\nprint(len(asyncio.run(server.mcp.list_tools())))").strip())
+    visible = total - len(hidden)
+    status = openclaw("mcp", "status", check=False).stdout
+    if f"{args.name}:" not in status:
+        fail(f"{args.name} is not listed by `openclaw mcp status`")
+    print(f"    {args.name}: {visible} tools visible to agents ({total} in the server, {len(hidden)} hidden)")
 
     print(f"""
 Done.

@@ -78,12 +78,18 @@ IPASEN_USER='…' IPASEN_PASSWORD='…' python3 ~/mcp/install.py --name ipasen_p
   --agent partner --deny-agent main --telegram-chat-id 987654321
 ```
 
-Useful flags: `--holder "Name"` (how the skill refers to the person), `--read-only` (turn
+Useful flags: `--restart-gateway` (see below), `--holder "Name"` (how the skill refers to the person), `--read-only` (turn
 actions off again), `--ref <tag>` (pin a version), `--uninstall [--purge]`.
 
-Expected output ends with `Done.` and a probe line like `ipasen: 39 tools` (read-only) or
-`ipasen: 55 tools` (with actions). With actions, the human receives a Telegram message
-"iPasen MCP (ipasen) installed…" — ask them to confirm it arrived.
+Expected output ends with `Done.` and a check line like `ipasen: 39 tools visible to agents`
+(read-only) or `55 tools` (with actions). When actions are first enabled, the human receives a
+Telegram message "iPasen MCP (ipasen) installed…" — ask them to confirm it arrived.
+
+**OpenClaw 2026.10.10 and later** only let MCP servers be added or changed while the gateway is
+stopped. The first install (and any change of mode or paths) therefore needs
+`--restart-gateway`: the installer stops the gateway for a few seconds, registers the server and
+starts it again. **Ask the human before using it** — while the gateway is down, chats get no
+answers. Plain updates (same settings) do not need it: the code is replaced and reloaded live.
 
 If it fails:
 | Message | Fix |
@@ -93,6 +99,8 @@ If it fails:
 | `need Python >= 3.10 … or uv` | install uv (step 2) |
 | `no Telegram bot token` | OpenClaw has several bots: add `--telegram-account <id>` |
 | `agent '…' not found` | use an id from `agents.entries` (`openclaw config get agents.entries`) |
+| `…only changes MCP servers with the gateway stopped` | ask the human, then re-run with `--restart-gateway` |
+| `the OpenClaw gateway did not start` | `systemctl --user start openclaw-gateway`, then `systemctl --user status openclaw-gateway` |
 
 ### 5. Verify (queries only)
 

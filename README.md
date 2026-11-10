@@ -70,8 +70,9 @@ IPASEN_USER='your_user' IPASEN_PASSWORD='your_password' python3 install.py --age
 
 The installer downloads the server, creates the virtualenv, stores secrets in
 `~/.config/ipasen-mcp/<name>/credentials.env` (mode 600, never in `openclaw.json`), registers the
-server, grants it to the agent, writes a skill with your family's data, and probes it
-(`39 tools` read-only, `55 tools` with actions). Re-run it to update. Details and options:
+server, grants it to the agent, writes a skill with your family's data, and checks it
+(`39 tools` read-only, `55 tools` with actions). Re-run it to update. On OpenClaw ≥ 2026.10.10 the
+first install needs `--restart-gateway` (the gateway must be stopped to register a server). Details and options:
 [clients/openclaw/INSTALL.md](clients/openclaw/INSTALL.md).
 
 ### Claude Code, Claude Desktop, OpenCode
